@@ -24,6 +24,7 @@ jobs:
       env:
         BUCK2: ${{ runner.temp }}/artifacts/buck2
         BUCK2_NATIVE_TEST_CACHE_SMOKE: '1'
+        PYTHONDONTWRITEBYTECODE: '1'
       run: uv run --with pytest pytest -q tests/core/test/test_native_test_cache.py
     - uses: ./.github/actions/run_test_py
   macos-build-and-test:
