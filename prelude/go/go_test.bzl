@@ -182,6 +182,7 @@ def go_test_impl(ctx: AnalysisContext) -> list[Provider]:
             env = env,
             labels = ctx.attrs.labels,
             contacts = ctx.attrs.contacts,
+            supports_test_execution_caching = ctx.attrs.supports_test_execution_caching,
             default_executor = re_executors.default_executor,
             executor_overrides = re_executors.executor_overrides,
             run_from_project_root = True,

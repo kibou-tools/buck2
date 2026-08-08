@@ -395,6 +395,14 @@ go_test = prelude_rule(
                  relative paths, such as `ioutil.ReadFile("testdata/input")`.
             """,
             ),
+            "supports_test_execution_caching": attrs.bool(
+                default = False,
+                doc = """
+                If true, Buck2 may read this test's result from the REAPI action cache and,
+                 when cache uploads are permitted, write a successful local result to it.
+                 Enable this only when every runtime input is declared.
+            """,
+            ),
         }
         | buck.test_label_arg()
         | buck.test_rule_timeout_ms()
