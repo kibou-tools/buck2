@@ -1,0 +1,194 @@
+name: Release Kibou Buck2 binaries
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      release_timestamp: ${{ steps.version.outputs.release_timestamp }}
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Define version metadata
+        id: version
+        shell: bash
+        run: |
+          tag="kibou-$(date -u +%Y-%m-%d-%H.%M.%S)"
+          echo "release_timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$tag-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - os: ubuntu-24.04
+            triple: x86_64-unknown-linux-musl
+            archive: buck2-x86_64-unknown-linux-musl.zst
+            cross: true
+          - os: macos-15
+            triple: aarch64-apple-darwin
+            archive: buck2-aarch64-apple-darwin.zst
+          - os: windows-2025
+            triple: x86_64-pc-windows-msvc
+            archive: buck2-x86_64-pc-windows-msvc.exe.zst
+            windows: true
+    runs-on: ${{ matrix.target.os }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: SebRollen/toml-action@v1.2.0
+        id: rust-toolchain
+        with:
+          file: rust-toolchain.toml
+          field: toolchain.channel
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ steps.rust-toolchain.outputs.value }}
+          targets: ${{ matrix.target.triple }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: kibou-buck2-release
+          key: ${{ matrix.target.triple }}
+      - uses: actions-rs/install@v0.1
+        if: matrix.target.cross
+        with:
+          crate: cross
+          version: latest
+      - name: Verify native runner architecture
+        shell: bash
+        run: |
+          case "${{ matrix.target.triple }}" in
+            aarch64-apple-darwin) test "$(uname -m)" = arm64 ;;
+            x86_64-*) [[ "$(uname -m)" =~ ^(x86_64|AMD64)$ ]] ;;
+          esac
+      - name: Build stamped release binary
+        shell: bash
+        env:
+          BUCK2_RELEASE_TIMESTAMP: ${{ needs.version.outputs.release_timestamp }}
+          BUCK2_SET_EXPLICIT_VERSION: ${{ needs.version.outputs.version }}
+          RUSTFLAGS: --cfg tokio_unstable -C strip=debuginfo -C codegen-units=1
+        run: |
+          if [[ "${{ matrix.target.cross }}" == "true" ]]; then
+            cargo_command=cross
+          else
+            cargo_command=cargo
+          fi
+          "$cargo_command" build --release --bin buck2 --target "${{ matrix.target.triple }}"
+      - name: Check stamped version
+        shell: bash
+        run: |
+          binary="target/${{ matrix.target.triple }}/release/buck2"
+          if [[ "${{ matrix.target.windows }}" == "true" ]]; then
+            binary="${binary}.exe"
+          fi
+          "$binary" --version | tee version.txt
+          grep -F "${GITHUB_SHA}" version.txt
+      - name: Compress and checksum
+        shell: bash
+        run: |
+          binary="target/${{ matrix.target.triple }}/release/buck2"
+          if [[ "${{ matrix.target.windows }}" == "true" ]]; then
+            binary="${binary}.exe"
+          fi
+          mkdir -p artifacts
+          archive="artifacts/${{ matrix.target.archive }}"
+          zstd -z "$binary" -o "$archive"
+          python - "$archive" <<'PY'
+          import hashlib
+          import pathlib
+          import sys
+
+          archive = pathlib.Path(sys.argv[1])
+          checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
+          archive.with_name(archive.name + ".sha256").write_text(
+              f"{checksum}  {archive.name}\n"
+          )
+          PY
+      - uses: actions/upload-artifact@v6
+        with:
+          name: kibou-buck2-${{ matrix.target.triple }}
+          path: artifacts/
+
+  verify:
+    needs:
+      - version
+      - build
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - os: ubuntu-24.04
+            triple: x86_64-unknown-linux-musl
+            archive: buck2-x86_64-unknown-linux-musl.zst
+          - os: macos-15
+            triple: aarch64-apple-darwin
+            archive: buck2-aarch64-apple-darwin.zst
+          - os: windows-2025
+            triple: x86_64-pc-windows-msvc
+            archive: buck2-x86_64-pc-windows-msvc.exe.zst
+            windows: true
+    runs-on: ${{ matrix.target.os }}
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          name: kibou-buck2-${{ matrix.target.triple }}
+          path: artifacts
+      - name: Verify downloaded binary
+        shell: bash
+        run: |
+          archive="artifacts/${{ matrix.target.archive }}"
+          python - "$archive" <<'PY'
+          import hashlib
+          import pathlib
+          import sys
+
+          archive = pathlib.Path(sys.argv[1])
+          expected = archive.with_name(archive.name + ".sha256").read_text().split()[0]
+          actual = hashlib.sha256(archive.read_bytes()).hexdigest()
+          if actual != expected:
+              raise SystemExit(f"checksum mismatch: expected {expected}, got {actual}")
+          PY
+          mkdir -p unpacked
+          binary="unpacked/buck2"
+          if [[ "${{ matrix.target.windows }}" == "true" ]]; then
+            binary="${binary}.exe"
+          fi
+          zstd -d "$archive" -o "$binary"
+          chmod +x "$binary"
+          "$binary" --version | tee version.txt
+          grep -F "${GITHUB_SHA}" version.txt
+
+  release:
+    needs:
+      - version
+      - verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: kibou-buck2-*
+          path: artifacts
+          merge-multiple: true
+      - name: Assemble checksums
+        shell: bash
+        run: cat artifacts/*.sha256 | sort > SHA256SUMS
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.version.outputs.tag }}
+        shell: bash
+        run: |
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "$TAG" \
+            artifacts/*.zst SHA256SUMS

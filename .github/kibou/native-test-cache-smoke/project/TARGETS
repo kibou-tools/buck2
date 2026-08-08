@@ -1,0 +1,36 @@
+load(":rules.bzl", "generated_native_test", "native_test")
+
+native_test(
+    name = "cacheable",
+    resource = "resource.txt",
+    script = "test_driver.py",
+    supports_test_execution_caching = True,
+)
+
+native_test(
+    name = "not_opted_in",
+    resource = "resource.txt",
+    script = "test_driver.py",
+)
+
+native_test(
+    name = "failing",
+    resource = "failing-resource.txt",
+    script = "test_driver.py",
+    supports_test_execution_caching = True,
+)
+
+native_test(
+    name = "upload_disabled",
+    resource = "upload-disabled-resource.txt",
+    script = "test_driver.py",
+    supports_test_execution_caching = True,
+)
+
+generated_native_test(
+    name = "generated_cacheable",
+    generator = "generate_test.py",
+    producer_input = "producer-input.txt",
+    resource = "producer-resource.txt",
+    template = "test_driver.py",
+)

@@ -20,6 +20,30 @@ jobs:
     - uses: actions/checkout@v6
     - uses: ./.github/actions/setup_linux_env
     - uses: ./.github/actions/build_debug
+    - name: Restore NativeLink smoke cache
+      id: restore-native-test-cache
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ runner.temp }}/buck2-native-test-cache/cache.tar.gz
+        key: native-test-cache-v1-${{ runner.os }}-${{ hashFiles('app/buck2_test/src/orchestrator.rs', '.github/kibou/native-test-cache-smoke/**') }}-${{ github.run_id }}
+        restore-keys: |
+          native-test-cache-v1-${{ runner.os }}-${{ hashFiles('app/buck2_test/src/orchestrator.rs', '.github/kibou/native-test-cache-smoke/**') }}-
+    - name: Smoke test local native-test cache uploads
+      env:
+        BUCK2: ${{ runner.temp }}/artifacts/buck2
+        CACHE_ARCHIVE: ${{ runner.temp }}/buck2-native-test-cache/cache.tar.gz
+        CONTAINER_RUNTIME: docker
+        STATE_ROOT: ${{ runner.temp }}/buck2-native-test-cache
+      run: .github/kibou/native-test-cache-smoke/run.sh
+    - name: Stop NativeLink before saving its cache
+      if: always()
+      run: docker stop buck2-native-test-cache-smoke || true
+    - name: Save NativeLink smoke cache
+      if: success()
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ runner.temp }}/buck2-native-test-cache/cache.tar.gz
+        key: native-test-cache-v1-${{ runner.os }}-${{ hashFiles('app/buck2_test/src/orchestrator.rs', '.github/kibou/native-test-cache-smoke/**') }}-${{ github.run_id }}
     - uses: ./.github/actions/run_test_py
   macos-build-and-test:
     # Pinned to macos-14: on the macos-15 runner image `latest-stable` selects an
