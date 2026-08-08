@@ -4156,12 +4156,6 @@ def many_locals():
     Ok(())
 }
 
-/// Serialization must be byte-deterministic for cross-run dedup. Compile the
-/// same source twice into independent modules (different heaps/seeds) and assert
-/// the byte streams match.
-///
-/// Compile-twice rather than serialize/deserialize/serialize: re-serializing a
-/// paged-in module hits an unrelated chunk-index gap, orthogonal to `BcInstrs`.
 #[starlark_derive::starlark_module]
 fn register_deterministic_foo(builder: &mut GlobalsBuilder) {
     fn foo() -> anyhow::Result<i32> {
@@ -4169,6 +4163,12 @@ fn register_deterministic_foo(builder: &mut GlobalsBuilder) {
     }
 }
 
+/// Serialization must be byte-deterministic for cross-run dedup. Compile the
+/// same source twice into independent modules (different heaps/seeds) and assert
+/// the byte streams match.
+///
+/// Compile-twice rather than serialize/deserialize/serialize: re-serializing a
+/// paged-in module hits an unrelated chunk-index gap, orthogonal to `BcInstrs`.
 #[test]
 fn test_bcinstrs_module_serialization_deterministic() -> crate::Result<()> {
     use crate::environment::FrozenModule;
