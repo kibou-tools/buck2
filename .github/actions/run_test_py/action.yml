@@ -5,3 +5,7 @@ runs:
   - name: Run test.py
     run: python3 test.py --ci --git --buck2=$RUNNER_TEMP/artifacts/buck2
     shell: bash
+    env:
+      # Two pagable tests reuse named global heaps and race under libtest's
+      # default parallel execution on GitHub-hosted runners.
+      RUST_TEST_THREADS: '1'
