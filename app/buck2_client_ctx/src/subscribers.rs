@@ -11,6 +11,7 @@
 use derive_more::Display;
 
 #[derive(Debug, Display, Eq, PartialEq)]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub(crate) enum OomEvidence {
     #[display("the kernel reported killing daemon PID {pid}")]
     KernelVictim { pid: i64, line: String },
@@ -21,6 +22,7 @@ pub(crate) enum OomEvidence {
 }
 
 impl OomEvidence {
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     fn line(&self) -> &str {
         match self {
             Self::KernelVictim { line, .. }
