@@ -51,9 +51,7 @@ use crate::values::OwnedFrozenValue;
 use crate::values::OwnedFrozenValueTyped;
 use crate::values::StarlarkValue;
 use crate::values::ValueLike;
-use crate::values::dict::globals::register_dict;
 use crate::values::layout::heap::heap_type::FrozenHeapName;
-use crate::values::list::globals::register_list;
 
 pagable::static_str!(TEST_EVAL_HEAP_NAME = "test_eval");
 pagable::static_str!(TESTING_GLOBALS_HEAP_NAME = "testing");
@@ -2468,12 +2466,12 @@ fn test_globals_roundtrip() {
     let mut globals = GlobalsBuilder::new();
     STATIC_GLOBALS.populate(&mut globals);
 
-    register_list(&mut globals);
+    register_foo(&mut globals);
     globals.namespace_no_docs("ns_hidden", |_| {});
     globals.namespace("ns", |globals| {
         globals.namespace_no_docs("nested_ns_hidden", |_| {});
         globals.set("x", FrozenValue::new_none());
-        register_dict(globals);
+        register_foo(globals);
     });
 
     let globals = globals.build_named(GlobalFrozenHeapName {
@@ -4164,6 +4162,13 @@ def many_locals():
 ///
 /// Compile-twice rather than serialize/deserialize/serialize: re-serializing a
 /// paged-in module hits an unrelated chunk-index gap, orthogonal to `BcInstrs`.
+#[starlark_derive::starlark_module]
+fn register_deterministic_foo(builder: &mut GlobalsBuilder) {
+    fn foo() -> anyhow::Result<i32> {
+        Ok(1)
+    }
+}
+
 #[test]
 fn test_bcinstrs_module_serialization_deterministic() -> crate::Result<()> {
     use crate::environment::FrozenModule;
@@ -4176,21 +4181,26 @@ fn test_bcinstrs_module_serialization_deterministic() -> crate::Result<()> {
 def add(a, b):
     return a + b
 
-def use_loop(n):
+def use_loop():
     total = 0
-    for i in range(n):
+    for i in [0, 1, 2, 3]:
         total = total + i
     return total
 
 def use_comprehension():
-    return [i * i for i in range(4)]
+    return [i * i for i in [0, 1, 2, 3]]
+
+def use_native():
+    return foo()
 "#;
 
-    // Shared globals so native-fn refs (`range`) get the same `HeapRefId` in
+    // Shared globals so native-fn refs (`foo`) get the same `HeapRefId` in
     // both compilations.
-    let globals = GlobalsBuilder::standard().build_named(GlobalFrozenHeapName {
-        name: TEST_BCINSTRS_DET_GLOBALS_HEAP_NAME,
-    });
+    let globals = GlobalsBuilder::new()
+        .with(register_deterministic_foo)
+        .build_named(GlobalFrozenHeapName {
+            name: TEST_BCINSTRS_DET_GLOBALS_HEAP_NAME,
+        });
 
     // Same heap name both times so self-references encode to the same `HeapRefId`.
     let compile = || -> crate::Result<FrozenModule> {
