@@ -9,8 +9,12 @@
 # pyre-strict
 
 from buck2.tests.e2e_util.api.buck import Buck
-from buck2.tests.e2e_util.buck_workspace import buck_test
-from buck2.tests.e2e_util.helper.utils import random_string, read_what_ran
+from buck2.tests.e2e_util.buck_workspace import buck_test, env
+from buck2.tests.e2e_util.helper.utils import (
+    filter_events,
+    random_string,
+    read_what_ran,
+)
 
 
 @buck_test()
@@ -152,6 +156,37 @@ async def test_local_test_execution_not_cached(buck: Buck) -> None:
     assert second_test_runs[0]["reproducer"]["executor"] == "Local", (
         "Expected test to run locally, not be cached!"
     )
+
+
+@buck_test()
+@env("BUCK2_TEST_SKIP_ACTION_CACHE_WRITE", "true")
+async def test_local_test_execution_uploaded_to_cache(buck: Buck) -> None:
+    args = [
+        "-c",
+        "test.local_enabled=true",
+        "-c",
+        "test.remote_enabled=false",
+        "-c",
+        "test.remote_cache_enabled=true",
+        "-c",
+        "test.allow_cache_uploads=true",
+        "-c",
+        f"test.seed={random_string()}",
+        "//:cacheable_test",
+    ]
+
+    await buck.test(*args)
+
+    what_ran = await read_what_ran(buck)
+    test_runs = [entry for entry in what_ran if entry["reason"] == "test.run"]
+    assert len(test_runs) == 1
+    assert test_runs[0]["reproducer"]["executor"] == "Local"
+
+    cache_uploads = await filter_events(
+        buck, "Event", "data", "SpanEnd", "data", "CacheUpload"
+    )
+    successful_uploads = [upload for upload in cache_uploads if upload["success"]]
+    assert len(successful_uploads) == 2
 
 
 @buck_test()

@@ -117,7 +117,8 @@ pub struct ExternalRunnerTestInfoGen<V: ValueLifetimeless> {
     /// command related to test execution, including listing.
     worker: ValueOfUncheckedGeneric<V, FrozenWorkerInfo>,
 
-    /// Whether test execution results can be read from the remote action cache.
+    /// Whether test execution results can be read from and, when permitted by the execution
+    /// platform, written to the remote action cache.
     supports_test_execution_caching: ValueOfUncheckedGeneric<V, bool>,
 }
 

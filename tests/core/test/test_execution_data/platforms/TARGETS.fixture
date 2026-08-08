@@ -1,5 +1,7 @@
 local_enabled = read_config("test", "local_enabled", "true")
 remote_enabled = read_config("test", "remote_enabled", "false")
+remote_cache_enabled = read_config("test", "remote_cache_enabled", "false")
+allow_cache_uploads = read_config("test", "allow_cache_uploads", "false")
 
 platform(
     name = "platform",
@@ -8,7 +10,9 @@ platform(
 execution_platform(
     name = "exec_platform",
     platform = ":platform",
+    allow_cache_uploads = allow_cache_uploads == "true",
     local_enabled = local_enabled == "true",
+    remote_cache_enabled = remote_cache_enabled == "true",
     remote_enabled = remote_enabled == "true",
 )
 
