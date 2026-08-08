@@ -190,6 +190,83 @@ async def test_local_test_execution_uploaded_to_cache(buck: Buck) -> None:
 
 
 @buck_test()
+@env("BUCK2_TEST_SKIP_ACTION_CACHE_WRITE", "true")
+async def test_local_test_execution_not_cached_with_disable_flag(buck: Buck) -> None:
+    args = [
+        "-c",
+        "test.local_enabled=true",
+        "-c",
+        "test.remote_enabled=false",
+        "-c",
+        "test.remote_cache_enabled=true",
+        "-c",
+        "test.allow_cache_uploads=true",
+        "-c",
+        f"test.seed={random_string()}",
+        "//:cacheable_test",
+        "--",
+        "--disable-test-execution-caching",
+    ]
+
+    await buck.test(*args)
+    await buck.test(*args)
+
+    what_ran = await read_what_ran(buck)
+    test_runs = [entry for entry in what_ran if entry["reason"] == "test.run"]
+    assert len(test_runs) == 1
+    assert test_runs[0]["reproducer"]["executor"] == "Local"
+
+    cache_uploads = await filter_events(
+        buck, "Event", "data", "SpanEnd", "data", "CacheUpload"
+    )
+    test_action_digest = test_runs[0]["reproducer"]["details"]["digest"]
+    assert not any(
+        upload["success"] and upload["action_digest"] == test_action_digest
+        for upload in cache_uploads
+    )
+
+
+@buck_test()
+@env("BUCK2_TEST_SKIP_ACTION_CACHE_WRITE", "true")
+async def test_local_stress_runs_are_not_cached(buck: Buck) -> None:
+    args = [
+        "-c",
+        "test.local_enabled=true",
+        "-c",
+        "test.remote_enabled=false",
+        "-c",
+        "test.remote_cache_enabled=true",
+        "-c",
+        "test.allow_cache_uploads=true",
+        "-c",
+        f"test.seed={random_string()}",
+        "//:cacheable_test",
+        "--",
+        "--stress-runs",
+        "2",
+    ]
+
+    await buck.test(*args)
+    await buck.test(*args)
+
+    what_ran = await read_what_ran(buck)
+    test_runs = [entry for entry in what_ran if entry["reason"] == "test.run"]
+    assert len(test_runs) == 2
+    assert all(run["reproducer"]["executor"] == "Local" for run in test_runs)
+
+    cache_uploads = await filter_events(
+        buck, "Event", "data", "SpanEnd", "data", "CacheUpload"
+    )
+    test_action_digests = {
+        run["reproducer"]["details"]["digest"] for run in test_runs
+    }
+    assert not any(
+        upload["success"] and upload["action_digest"] in test_action_digests
+        for upload in cache_uploads
+    )
+
+
+@buck_test()
 async def test_remote_test_execution_not_cached_with_no_remote_cache(
     buck: Buck,
 ) -> None:

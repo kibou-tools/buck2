@@ -2,7 +2,7 @@ def _native_test_impl(ctx):
     return [
         DefaultInfo(),
         ExternalRunnerTestInfo(
-            command = ["python3", ctx.attrs.script, ctx.attrs.resource],
+            command = [ctx.attrs.python, ctx.attrs.script, ctx.attrs.resource],
             run_from_project_root = False,
             supports_test_execution_caching = ctx.attrs.supports_test_execution_caching,
             type = "lionhead",
@@ -13,6 +13,7 @@ def _native_test_impl(ctx):
 native_test = rule(
     impl = _native_test_impl,
     attrs = {
+        "python": attrs.string(),
         "resource": attrs.source(),
         "script": attrs.source(),
         "supports_test_execution_caching": attrs.bool(default = False),
@@ -23,7 +24,7 @@ def _generated_native_test_impl(ctx):
     generated_script = ctx.actions.declare_output("generated_test.py")
     ctx.actions.run(
         [
-            "python3",
+            ctx.attrs.python,
             ctx.attrs.generator,
             ctx.attrs.producer_input,
             ctx.attrs.template,
@@ -35,7 +36,7 @@ def _generated_native_test_impl(ctx):
     return [
         DefaultInfo(generated_script),
         ExternalRunnerTestInfo(
-            command = ["python3", generated_script, ctx.attrs.resource],
+            command = [ctx.attrs.python, generated_script, ctx.attrs.resource],
             run_from_project_root = False,
             supports_test_execution_caching = True,
             type = "lionhead",
@@ -48,6 +49,7 @@ generated_native_test = rule(
     attrs = {
         "generator": attrs.source(),
         "producer_input": attrs.source(),
+        "python": attrs.string(),
         "resource": attrs.source(),
         "template": attrs.source(),
     },

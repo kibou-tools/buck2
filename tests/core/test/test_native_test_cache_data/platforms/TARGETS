@@ -1,0 +1,15 @@
+load(":defs.bzl", "smoke_execution_platform")
+
+platform(name = "platform")
+
+smoke_execution_platform(
+    name = "exec_platform",
+    platform = ":platform",
+    allow_cache_uploads = read_config("test", "allow_cache_uploads", "true") == "true",
+    remote_cache_enabled = read_config("test", "remote_cache_enabled", "true") == "true",
+)
+
+execution_platforms(
+    name = "platforms",
+    platforms = [":exec_platform"],
+)

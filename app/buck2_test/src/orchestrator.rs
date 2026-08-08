@@ -545,8 +545,10 @@ impl<'a> BuckTestOrchestrator<'a> {
         } = key;
         let fs = dice.get_artifact_fs().await?;
         let test_info = Self::get_test_info(dice, &test_target, internal_runner_config).await?;
-        let effective_test_execution_caching =
-            test_info.supports_test_execution_caching() && !disable_test_execution_caching;
+        let effective_test_execution_caching = test_execution_caching_enabled(
+            test_info.supports_test_execution_caching(),
+            disable_test_execution_caching,
+        );
         let disable_local_network_isolation =
             Self::disable_local_network_isolation(stage.as_ref(), &test_info);
         let test_executor = Self::get_test_executor(
@@ -2498,6 +2500,13 @@ fn create_action_key_suffix(stage: &TestStage) -> String {
     action_key_suffix
 }
 
+fn test_execution_caching_enabled(
+    provider_supports_test_execution_caching: bool,
+    request_disables_test_execution_caching: bool,
+) -> bool {
+    provider_supports_test_execution_caching && !request_disables_test_execution_caching
+}
+
 #[derive(Debug)]
 struct LocalResourceTarget<'a> {
     target: &'a ConfiguredTargetLabel,
@@ -2773,6 +2782,17 @@ mod tests {
             repeat_count: None,
         };
         assert_eq!(create_action_key_suffix(&stage), "variant1 test1 test2");
+    }
+
+    #[test]
+    fn test_execution_caching_requires_provider_opt_in() {
+        assert!(!test_execution_caching_enabled(false, false));
+        assert!(test_execution_caching_enabled(true, false));
+    }
+
+    #[test]
+    fn test_execution_request_can_disable_caching() {
+        assert!(!test_execution_caching_enabled(true, true));
     }
 
     #[test]

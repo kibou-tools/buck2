@@ -15,9 +15,9 @@ nano_prelude = bundled
 digest_algorithms = SHA256
 
 [buck2_re_client]
-action_cache_address = grpc://127.0.0.1:50051
-engine_address = grpc://127.0.0.1:50051
-cas_address = grpc://127.0.0.1:50051
+action_cache_address = grpc://127.0.0.1:{PORT}
+engine_address = grpc://127.0.0.1:{PORT}
+cas_address = grpc://127.0.0.1:{PORT}
 capabilities = false
 tls = false
 instance_name = main
