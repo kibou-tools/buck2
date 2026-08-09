@@ -84,7 +84,7 @@ jobs:
         run: |
           cd artifacts
           sha256sum --check --ignore-missing *.sha256
-          cat *.sha256 | sort > SHA256SUMS
+          sha256sum *.zst | sort > SHA256SUMS
           tag="kibou-$(date -u +%Y-%m-%d-%H.%M.%S)"
           gh release create "$tag" \
             --repo "$GITHUB_REPOSITORY" \
